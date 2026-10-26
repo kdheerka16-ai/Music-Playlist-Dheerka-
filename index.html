@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playlist Manager – DSA Doubly Linked List</title>
+<style>
+:root{--bg:#10201f;--card:#183331;--ink:#eafaf6;--muted:#8fbab2;--line:#2c5550;--accent:#ff6f61}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif;padding:20px}
+main{max-width:820px;margin:0 auto}
+h1{margin:0 0 4px;font-size:1.8rem}
+.sub{color:var(--muted);margin:0 0 18px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+h2{font-size:1.05rem;margin:0 0 10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;font-size:.85rem;color:var(--muted);gap:4px}
+input{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+button{font:inherit;padding:9px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#2a0a06;cursor:pointer;font-weight:600}
+button.alt{background:transparent;color:var(--accent)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#now{font-size:1.3rem;margin-bottom:10px}
+.list{display:flex;align-items:center;overflow-x:auto;padding:6px 2px 10px}
+.song{min-width:130px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)}
+.song.cur{border:2px solid var(--accent)}
+.song b{display:block;word-break:break-word}
+.song span{color:var(--muted);font-size:.8rem}
+.ar{padding:0 6px;color:var(--muted)}
+.empty{color:var(--muted)}
+.tags{font-size:.75rem;color:var(--accent)}
+#msg{min-height:1.4em;margin:8px 0 0;color:var(--accent)}
+#log{list-style:none;margin:0;padding:0;max-height:160px;overflow:auto;font:.85rem Consolas,monospace}
+#log li{padding:3px 0;border-bottom:1px dashed var(--line)}
+</style>
+</head>
+<body>
+<main>
+<h1>Playlist manager</h1>
+<p class="sub">Songs are nodes in a doubly linked list, so you can move forward and backward.</p>
+
+<section class="box">
+<h2>Add a song</h2>
+<div class="row">
+<label>Title <input id="title" maxlength="40" placeholder="Song title"></label>
+<label>Artist <input id="artist" maxlength="30" placeholder="Artist"></label>
+<button id="addEnd">Add to end</button>
+<button id="addNext" class="alt">Play next (insert after current)</button>
+</div>
+<p id="msg" role="status"></p>
+</section>
+
+<section class="box">
+<div id="now">Nothing playing</div>
+<div class="row">
+<button id="prev">⏮ Previous</button>
+<button id="next">Next ⏭</button>
+<button id="rem" class="alt">Remove current</button>
+<button id="rev" class="alt">Reverse playlist</button>
+</div>
+</section>
+
+<section class="box">
+<h2>Playlist (<span id="count">0</span> songs)</h2>
+<div class="list" id="list"></div>
+</section>
+
+<section class="box"><h2>Operation log</h2><ul id="log"></ul></section>
+</main>
+
+<script>
+// ---- Doubly linked list ----
+class Node { constructor(song){ this.song = song; this.prev = null; this.next = null; } }
+class Playlist {
+  constructor(){ this.head = null; this.tail = null; this.cur = null; this.size = 0; }
+  addEnd(song){                      // O(1)
+    const n = new Node(song);
+    if (!this.tail) this.head = this.tail = this.cur = n;
+    else { n.prev = this.tail; this.tail.next = n; this.tail = n; }
+    this.size++;
+  }
+  addAfterCurrent(song){             // O(1)
+    if (!this.cur) return this.addEnd(song);
+    const n = new Node(song);
+    n.prev = this.cur; n.next = this.cur.next;
+    if (this.cur.next) this.cur.next.prev = n; else this.tail = n;
+    this.cur.next = n; this.size++;
+  }
+  removeCurrent(){                   // O(1)
+    const n = this.cur; if (!n) return null;
+    if (n.prev) n.prev.next = n.next; else this.head = n.next;
+    if (n.next) n.next.prev = n.prev; else this.tail = n.prev;
+    this.cur = n.next || n.prev; this.size--;
+    return n.song;
+  }
+  next(){ if (this.cur && this.cur.next){ this.cur = this.cur.next; return true; } return false; }
+  prev(){ if (this.cur && this.cur.prev){ this.cur = this.cur.prev; return true; } return false; }
+  reverse(){                         // O(n): swap prev and next in every node
+    let c = this.head;
+    while (c){ const t = c.next; c.next = c.prev; c.prev = t; c = t; }
+    const h = this.head; this.head = this.tail; this.tail = h;
+  }
+  toArray(){ const a = []; for (let c = this.head; c; c = c.next) a.push(c); return a; }
+}
+
+const pl = new Playlist();
+const $ = id => document.getElementById(id);
+const say = t => $('msg').textContent = t;
+function log(t){ const li = document.createElement('li'); li.textContent = new Date().toLocaleTimeString() + '  ' + t; $('log').prepend(li); }
+
+function render(){
+  $('count').textContent = pl.size;
+  $('now').textContent = pl.cur ? `Now playing: ${pl.cur.song.title} – ${pl.cur.song.artist}` : 'Nothing playing';
+  $('prev').disabled = !(pl.cur && pl.cur.prev);
+  $('next').disabled = !(pl.cur && pl.cur.next);
+  $('rem').disabled = !pl.cur; $('rev').disabled = pl.size < 2;
+  const list = $('list'); list.innerHTML = '';
+  if (!pl.size){ list.innerHTML = '<span class="empty">The playlist is empty. Add a song above.</span>'; return; }
+  pl.toArray().forEach((n, i, a) => {
+    const d = document.createElement('div'); d.className = 'song' + (n === pl.cur ? ' cur' : '');
+    const t = document.createElement('b'); t.textContent = n.song.title;
+    const s = document.createElement('span'); s.textContent = n.song.artist;
+    const g = document.createElement('div'); g.className = 'tags';
+    g.textContent = [i === 0 ? 'head' : '', i === a.length - 1 ? 'tail' : '', n === pl.cur ? 'playing' : ''].filter(Boolean).join(' · ');
+    d.append(t, s, g); list.append(d);
+    if (i < a.length - 1){ const ar = document.createElement('span'); ar.className = 'ar'; ar.textContent = '⇄'; list.append(ar); }
+  });
+}
+
+function getSong(){
+  const title = $('title').value.trim(), artist = $('artist').value.trim() || 'Unknown';
+  if (!title){ say('Enter a song title.'); $('title').focus(); return null; }
+  $('title').value = ''; $('artist').value = ''; say('');
+  return { title, artist };
+}
+$('addEnd').onclick = () => { const s = getSong(); if (!s) return; pl.addEnd(s); log(`added "${s.title}" at the end`); render(); };
+$('addNext').onclick = () => { const s = getSong(); if (!s) return; pl.addAfterCurrent(s); log(`inserted "${s.title}" after the current song`); render(); };
+$('next').onclick = () => { if (pl.next()) log(`next → "${pl.cur.song.title}"`); render(); };
+$('prev').onclick = () => { if (pl.prev()) log(`previous → "${pl.cur.song.title}"`); render(); };
+$('rem').onclick = () => { const s = pl.removeCurrent(); if (s) log(`removed "${s.title}"`); render(); };
+$('rev').onclick = () => { pl.reverse(); log('reversed the playlist'); render(); };
+render();
+</script>
+</body>
+</html>
